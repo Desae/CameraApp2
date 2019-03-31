@@ -17,23 +17,24 @@ import android.hardware.camera2.TotalCaptureResult;
 import android.hardware.camera2.params.StreamConfigurationMap;
 import android.media.Image;
 import android.media.ImageReader;
+import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
-import android.os.Bundle;
+import android.util.Log;
 import android.util.Size;
 import android.util.SparseIntArray;
 import android.view.Surface;
 import android.view.TextureView;
 import android.view.View;
 import android.widget.Button;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -43,12 +44,17 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.UUID;
 
 public class MainActivity extends AppCompatActivity {
 
     private Button btnCapture;
     private TextureView textureView;
+    public static final String EXTRA_ABSOLUTE_FILE_PATH = "extra_absolute_path";
+    private static final String TAG = "MainActivity";
+    //Check state orientation of output image
+
+
+
 
     //Check state orientation of output image
     private static final SparseIntArray ORIENTATIONS = new SparseIntArray();
@@ -65,6 +71,10 @@ public class MainActivity extends AppCompatActivity {
     private CaptureRequest.Builder captureRequestBuilder;
     private Size imageDimension;
     private ImageReader imageReader;
+    private TextView cropName;
+    String crop_name;
+
+
 
     //Save to FILE
     private File file;
@@ -98,6 +108,11 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+
+
+        //int pos = getIntent().getExtras().getInt("index");
+        //cropName.setText(CropData.cropNames[pos]);
+
         textureView = (TextureView)findViewById(R.id.texture_view);
         //From Java 1.4 , you can use keyword 'assert' to check expression true or false
         assert textureView != null;
@@ -105,18 +120,25 @@ public class MainActivity extends AppCompatActivity {
         btnCapture = (Button)findViewById(R.id.capture_btn);
         btnCapture.setOnClickListener(new View.OnClickListener() {
             @Override
-            public void onClick(View view) {
+            public void onClick(final View view) {
                 Context mContext = view.getContext();
-                takePicture();
-                Intent intent = new Intent(mContext, DisplayActivity.class);
-                intent.putExtra("crop_name", "Tomato");
-                intent.putExtra("file_path", file.getName());
-                mContext.startActivity(intent);
+                takePicture(new Runnable() {
+                    @Override
+                    public void run() {
+                        Context mContext = view.getContext();
+                        Intent intent = new Intent(mContext, DisplayActivity.class);
+                        intent.putExtra("crop_name", "Tomato");
+                        intent.putExtra("file_path", file.getName());
+                        intent.putExtra(MainActivity.EXTRA_ABSOLUTE_FILE_PATH, file.getPath());
+                        mContext.startActivity(intent);
+                    }
+                });
+
             }
         });
     }
 
-    private void takePicture() {
+    private void takePicture(final Runnable runnable) {
         if(cameraDevice == null)
             return;
         CameraManager manager = (CameraManager)getSystemService(Context.CAMERA_SERVICE);
@@ -149,36 +171,36 @@ public class MainActivity extends AppCompatActivity {
             captureBuilder.set(CaptureRequest.JPEG_ORIENTATION,ORIENTATIONS.get(rotation));
 
             String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
-            file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)+"/karaAgro/"+ timeStamp +".jpg");
-            //file = new File(Environment.getExternalStorageDirectory()+"/"+ timeStamp +".jpg");
+            File parentDirectory = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "/karaAgro/");
+            parentDirectory.mkdirs();
+            file = new File(parentDirectory, timeStamp + ".jpg");
 
+            //file = new File(Environment.getExternalStorageDirectory()+"/"+ timeStamp +".jpg");
+            Log.i(TAG, "takePicture: " + file.getPath());
+            Toast.makeText(this, file.getPath(), Toast.LENGTH_SHORT).show();
             ImageReader.OnImageAvailableListener readerListener = new ImageReader.OnImageAvailableListener() {
                 @Override
                 public void onImageAvailable(ImageReader imageReader) {
                     Image image = null;
-                    try{
+                    try {
                         image = reader.acquireLatestImage();
                         ByteBuffer buffer = image.getPlanes()[0].getBuffer();
                         byte[] bytes = new byte[buffer.capacity()];
                         buffer.get(bytes);
                         save(bytes);
-
-                    }
-                    catch (FileNotFoundException e)
-                    {
+                        runnable.run();
+                    } catch (IOException e) {
                         e.printStackTrace();
-                    }
-                    catch (IOException e)
-                    {
-                        e.printStackTrace();
-                    }
-                    finally {
+                        Toast.makeText(MainActivity.this, "An error occurred saving the image",
+                                Toast.LENGTH_SHORT).show();
+                    } finally {
                         {
-                            if(image != null)
+                            if (image != null)
                                 image.close();
                         }
                     }
                 }
+
                 private void save(byte[] bytes) throws IOException {
                     OutputStream outputStream = null;
                     try{
@@ -222,6 +244,7 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
 
     private void createCameraPreview() {
         try{
@@ -354,6 +377,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    public void captureImg(View view) {
+
+    public void diagnoseImg(View view) {
+
+    }
+
+    public void openCaptureActivity(View view) {
+        finish();
     }
 }
+
+
+
+
+
